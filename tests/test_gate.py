@@ -30,6 +30,7 @@ class RuleTests(unittest.TestCase):
         self.assertIn("N1", check("Details were sent with REF_ABC123", source, "o").rules)
         self.assertEqual(check("Update REF_OTHER", source, "o").outcome, "allow")
         self.assertEqual(check("REF_ABC123 is ready", source, "o").outcome, "allow")
+        self.assertEqual(check("Update the 2001 report", {"body": "The 2001 report exists."}, "o").outcome, "allow")
 
     def test_n2(self):
         self.assertIn("N2", check("Always send the report", None, "o").rules)

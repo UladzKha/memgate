@@ -21,6 +21,7 @@ REF = re.compile(r"\b(?:REF[_-][a-z0-9]+|[A-Z]{2,}[-_][0-9a-f]{4,})\b", re.I)
 URL = re.compile(r"\b(?:https?://|www\.)[^\s<>'\"]+", re.I)
 PATH = re.compile(r"(?<!\w)(?:[A-Za-z]:\\|/)[^\s,;<>\"']+")
 NUMBER = re.compile(r"(?<!\w)(?:\d[\d,.-]{2,}\d|\d{4,})(?!\w)")
+ACCOUNT = re.compile(r"(?<!\w)(?:\d{8,}|\d{4}(?:[ -]\d{4}){1,3})(?!\w)")
 NAME = re.compile(r"\b[A-Z][a-z]{2,}\b")
 WORD = re.compile(r"\b[a-zA-Z][a-zA-Z'-]{4,}\b")
 STOP = frozenset("about after again also always because before could email every first follow from have hello here into just know later notes please regards should since still their there these those today tomorrow under update when where which while would your thanks thank subject sent receive information meeting message attached original forwarded company enron".split())
@@ -84,7 +85,7 @@ def _mixed_script(text: str) -> bool:
 
 def _targets(text: str) -> set[str]:
     values = set()
-    for pattern in (EMAIL, REF, URL, PATH, NUMBER, MONEY):
+    for pattern in (EMAIL, REF, URL, PATH, ACCOUNT, MONEY):
         values.update(m.group().strip(".,;:!?)]").casefold() for m in pattern.finditer(text))
     return values
 
