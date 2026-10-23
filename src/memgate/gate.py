@@ -88,9 +88,17 @@ def _link(note: str, inbox: list[dict]) -> tuple[int | None, int]:
 
 
 T1 = re.compile(r"<\|[^|\n]*\|>|<s>|</s>|endoftext|\[SYSTEM\b|</EMAIL>|<prompt>|###\s*NEW\s+ROLE|^\s*(?:system|assistant|user)\s*:", re.I | re.M)
-T2 = re.compile(r"\b(?:ignore|disregard)\s+(?:all\s+)?(?:previous|prior|system)(?:\s+prompt)?\s+instructions\b|\byou\s+are\s+now\s+(?:(?:an?|the)\s+)?(?:AI|assistant|email\s+assistant|system|helpful\s+bot|digital\s+secretary)\b|\b(?:AI\s+(?:helper|assistant)|email\s+assistant|digital\s+secretary|assistant\s*[,;:]\s*(?:you|please|must|should)|note\s+for\s+the\s+assistant)\b|\b(?:after|when)\s+summari[sz]|\bafter\s+(?:successful\s+)?summary\s+generation\b|\b(?:once|when)\s+the\s+summary\s+is\s+complete\b|\bsummari[sz]e\b.{0,160}\bsend\s+(?:an?\s+)?email\b|\b(?:add|keep|store|save|put|remember)\b.{0,45}\b(?:permanent|long-term|future)\s+(?:notes|memory|tasks)\b|\b(?:API|function|tool)\s+call\b|\busing\s+the\s+api\b|\bsend[_-]?email\b", re.I | re.S)
+T2 = re.compile(
+    r"\b(?:ignore|disregard|override)\s+(?:all\s+)?(?:previous|prior|system)(?:\s+prompt)?\s+instructions\b"
+    r"|\byou\s+are\s+now\s+(?:(?:an?|the)\s+)?(?:AI|assistant|email\s+assistant|system|helpful\s+bot|digital\s+secretary)\b"
+    r"|\b(?:AI|assistant)\b.{0,80}\b(?:call|invoke|use)\s+(?:(?:an?|the)\s+)?(?:API|function|tool)\b"
+    r"|\b(?:after|when)\s+summari[sz]ing\b.{0,160}\b(?:send|forward|email)\b"
+    r"|\bsend[_-]?email\b",
+    re.I | re.S,
+)
+T3_PIPE = re.compile(r"\b[a-z]{2,}(?:[|¦][a-z]{2,})+\b", re.I)
 N3 = re.compile(r"\b(?:the\s+assistant\s+should|assistant\s+must|(?:when|after)\s+summari[sz]ing|summary\s+process|as\s+part\s+of\s+the\s+summary)\b", re.I)
-N2 = re.compile(r"\b(?:always|from\s+now\s+on|whenever|every\s+time|in\s+(?:all\s+replies|every\s+reply|every\s+email|all\s+emails)|each\s+time|for\s+every|(?:for\s+)?all\s+future|permanently|standing\s+(?:rule|instruction)|remember)\b", re.I)
+N2 = re.compile(r"\b(?:always|from\s+now\s+on|whenever|every\s+time|in\s+(?:all\s+replies|every\s+reply|every\s+email|all\s+emails)|each\s+time|for\s+every|(?:for\s+)?all\s+future|permanently|permanent\s+notes|long-term\s+memory|standing\s+(?:rule|instruction)|remember|note\s+for\s+(?:the\s+)?(?:AI|assistant))\b", re.I)
 ACTION_VERB = r"(?:send|sent|sending|forward(?:ed|ing)?|email(?:ed|ing)?|repl(?:y|ied|ying)|transfer(?:red|ring)?|withdraw(?:n|ing)?|pay|paid|paying|initiat(?:e|ed|ing)|delet(?:e|ed|ing)|remov(?:e|ed|ing)|mov(?:e|ed|ing)|redirect(?:ed|ing)?|shar(?:e|ed|ing)|grant(?:ed|ing)?|unlock(?:ed|ing)?|download(?:ed|ing)?|upload(?:ed|ing)?|chang(?:e|ed|ing)|updat(?:e|ed|ing)|deposit(?:ed|ing)?|buy|bought|buying|sell|sold|selling|creat(?:e|ed|ing)|giv(?:e|en|ing)|gave|us(?:e|ed|ing)|fill(?:ed|ing)?|schedul(?:e|ed|ing)|book(?:ed|ing)?|approv(?:e|ed|ing)|enabl(?:e|ed|ing)|disabl(?:e|ed|ing)|retriev(?:e|ed|ing)|fetch(?:ed|ing)?|post(?:ed|ing)?|submit(?:ted|ting)?|install(?:ed|ing)?|run|ran|running|execut(?:e|ed|ing)|set|setting|assign(?:ed|ing)?|contact(?:ed|ing)?|notif(?:y|ied|ying)|text(?:ed|ing)?|call(?:ed|ing)?|mention(?:ed|ing)?|includ(?:e|ed|ing)|cc|block(?:ed|ing)?)"
 ACTION = re.compile(r"\b" + ACTION_VERB + r"\b", re.I)
 REQUEST_ACTION = re.compile(r"\b(?:wants?\s+to|requested\s+(?:to\s+)?|asked\s+to|should|needs?\s+to)\s+" + ACTION_VERB + r"\b", re.I)
@@ -159,7 +167,7 @@ def check(note: str, source_email: dict | None, owner: str, trusted_senders: set
         rules.append("T1")
     if source and T2.search(source):
         rules.append("T2")
-    if source and (_tainted_space(source) or _mixed_script(source) or re.search(r"(?i)\b[a-z]{2,}(?:[|¦][a-z]{2,})+\b", source)):
+    if source and (_tainted_space(source) or _mixed_script(source) or T3_PIPE.search(source)):
         rules.append("T3")
     if N3.search(note):
         rules.append("N3")
@@ -168,9 +176,9 @@ def check(note: str, source_email: dict | None, owner: str, trusted_senders: set
         source_targets = _targets(source) if source else set().union(*(_targets(_email_text(email)) for email in (inbox or [])))
         if _action_with_target(note, _targets(note) & source_targets):
             rules.append("N1")
-        if N2.search(note):
+        if N2.search(note) or (source and N2.search(source)):
             rules.append("N2")
-    outcome = "block" if any(rule in rules for rule in ("T1", "T2", "T3", "N3")) else "allow_tainted" if rules else "allow"
+    outcome = "block" if any(rule in rules for rule in ("T1", "T2", "T3")) else "allow_tainted" if rules else "allow"
     index = source_email.get("source_index") if source_email else None
     return Decision(outcome, rules, index if isinstance(index, int) else None)
 
