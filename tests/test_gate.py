@@ -1,6 +1,7 @@
 import unittest
 
-from memgate import check, check_batch, guard, write_memory
+from memgate import (MemoryEntry, check, check_batch, guard, guard_strict,
+                     guard_tainted_only, write_memory)
 
 
 class RuleTests(unittest.TestCase):
@@ -103,6 +104,31 @@ class RuleTests(unittest.TestCase):
                                "owner", {"boss@example.org"})
         self.assertTrue(trusted[0].source_trusted)
         self.assertEqual(guard("transfer_money", {"amount": 5000}, trusted, set(), "Proceed"), "allow")
+
+    def test_guard_policies(self):
+        plain = MemoryEntry("The ticket is REF_plain.", "allow", [], "outside@example.org",
+                            False, ["REF_plain"])
+        tainted = MemoryEntry("Update REF_tainted.", "allow_tainted", ["N1"],
+                              "outside@example.org", False, ["REF_tainted"])
+        trusted = MemoryEntry("Update REF_trusted.", "allow_tainted", ["N1"],
+                              "boss@example.org", True, ["REF_trusted"])
+        memory = [plain, tainted, trusted]
+        args = lambda value: {"target": value}
+        self.assertEqual(guard_strict("do_action", args("REF_plain"), memory, set(), "Proceed"), "deny")
+        self.assertEqual(guard_tainted_only("do_action", args("REF_plain"), memory, set(), "Proceed"), "allow")
+        self.assertEqual(guard_tainted_only("do_action", args("REF_tainted"), memory, set(), "Proceed"), "deny")
+        self.assertEqual(guard_tainted_only("do_action", args("REF_trusted"), memory, set(), "Proceed"), "allow")
+        self.assertEqual(guard_tainted_only("do_action", args("REF_tainted"), memory,
+                                            {"REF_tainted"}, "Proceed"), "allow")
+        self.assertEqual(guard_tainted_only("do_action", args("REF_tainted"), memory,
+                                            set(), "Please handle REF_tainted"), "allow")
+        self.assertEqual(guard("do_action", args("REF_plain"), memory, set(), "Proceed"), "deny")
+        self.assertEqual(guard("do_action", args("REF_plain"), memory, set(), "Proceed",
+                               policy="tainted_only"), "allow")
+        self.assertEqual(guard_strict("do_action", args("REF_plain"), memory, set(), "Proceed").identifier,
+                         "REF_plain")
+        with self.assertRaises(ValueError):
+            guard("do_action", args("REF_plain"), memory, set(), "Proceed", policy="unknown")
 
     def test_link_and_no_link(self):
         inbox = [{"body": "Report from Alice about REF_AAAA."}, {"body": "Bob owns REF_BBBB."}]

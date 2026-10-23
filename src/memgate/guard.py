@@ -13,10 +13,12 @@ class GuardResult(str):
     """A string outcome with a machine-readable explanation."""
 
     reason: str | None
+    identifier: str | None
 
-    def __new__(cls, outcome: str, reason: str | None = None):
+    def __new__(cls, outcome: str, reason: str | None = None, identifier: str | None = None):
         result = str.__new__(cls, outcome)
         result.reason = reason
+        result.identifier = identifier
         return result
 
 
@@ -64,8 +66,11 @@ def _arg_targets(value: Any, key: str = "") -> set[str]:
     return result
 
 
-def guard(tool_name: str, args: dict, memory: list, trusted: set[str], user_text: str) -> GuardResult:
-    """Deny actions using an untrusted-memory target absent from user authority."""
+def guard(tool_name: str, args: dict, memory: list, trusted: set[str], user_text: str,
+          policy: str = "strict") -> GuardResult:
+    """Deny targets from memory according to the selected pure guard policy."""
+    if policy not in ("strict", "tainted_only"):
+        raise ValueError(f"Unknown action-guard policy: {policy}")
     action_targets = _arg_targets(args)
     trusted_targets = {_canonical(target) for value in trusted for target in (_targets(value) or {value})}
     user_targets = {_canonical(target) for target in _targets(user_text)}
@@ -73,9 +78,24 @@ def guard(tool_name: str, args: dict, memory: list, trusted: set[str], user_text
         source_trusted = entry.source_trusted if hasattr(entry, "source_trusted") else entry["source_trusted"]
         if source_trusted:
             continue
+        outcome = entry.outcome if hasattr(entry, "outcome") else entry["outcome"]
+        if policy == "tainted_only" and outcome != "allow_tainted":
+            continue
         targets = entry.targets if hasattr(entry, "targets") else entry["targets"]
         for target in targets:
             canonical = _canonical(target)
             if canonical in action_targets and canonical not in trusted_targets and canonical not in user_targets:
-                return GuardResult("deny", f"{tool_name} uses {target} from untrusted memory; ask the user before acting")
+                return GuardResult("deny", f"{tool_name} uses {target} from untrusted memory; ask the user before acting", target)
     return GuardResult("allow")
+
+
+def guard_strict(tool_name: str, args: dict, memory: list, trusted: set[str],
+                 user_text: str) -> GuardResult:
+    """Deny targets from any memory entry with an untrusted source sender."""
+    return guard(tool_name, args, memory, trusted, user_text, policy="strict")
+
+
+def guard_tainted_only(tool_name: str, args: dict, memory: list, trusted: set[str],
+                       user_text: str) -> GuardResult:
+    """Deny targets only from untrusted allow_tainted memory entries."""
+    return guard(tool_name, args, memory, trusted, user_text, policy="tainted_only")

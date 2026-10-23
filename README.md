@@ -19,5 +19,9 @@ the text, rule IDs, source sender, sender trust, and note targets. The model can
 receive only their plain text. Before executing a tool call, use
 `guard(tool_name, args, memory, trusted, user_text)`. Its return value compares
 equal to `"allow"` or `"deny"`; a denial also has a `.reason` explaining why
-the call needs user confirmation. The guard never calls a model or a network
-service.
+the call needs user confirmation. The default `strict` policy checks targets
+from every entry with an untrusted source sender. Pass `policy="tainted_only"`
+to check only `allow_tainted` entries; `guard_strict` and
+`guard_tainted_only` are pure convenience functions for the two policies.
+Both policies honor trusted targets and identifiers in the user's own text.
+The guard never calls a model or a network service.
