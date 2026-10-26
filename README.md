@@ -22,6 +22,8 @@ Python 3.10 or newer. No third-party packages.
 pip install git+https://github.com/UladzKha/memgate@v0.3.0
 ```
 
+The tag v0.3.0 reports version 0.3.0.dev0. The version string was not bumped before tagging; the code at the tag is the evaluated version.
+
 Or from a clone:
 
 ```sh
@@ -48,7 +50,7 @@ entry = memory[0]
 
 args = {"to": "c_1234abcd@relay.example.net"}
 guard("send_email", args, memory, trusted=set(), user_text="")          # "deny"
-guard_tainted_only("send_email", args, memory, trusted=set(), user_text="")
+guard_tainted_only("send_email", args, memory, trusted=set(), user_text="")  # "deny"
 guard("send_email", args, memory, trusted=set(),
       user_text="send it to c_1234abcd@relay.example.net")               # "allow"
 ```
